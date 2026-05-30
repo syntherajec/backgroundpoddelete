@@ -16,7 +16,7 @@
     .logo-icon svg{width:18px;height:18px}
     .badge{font-family:'DM Mono',monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);padding:3px 8px;border-radius:20px;color:var(--muted)}
     main{flex:1;max-width:960px;width:100%;margin:0 auto;padding:40px 24px}
-    .banner{border-radius:10px;padding:12px 16px;font-size:13px;margin-bottom:18px;display:none;align-items:center;gap:8px;line-height:1.4}
+    .banner{border-radius:10px;padding:12px 16px;font-size:13px;margin-bottom:18px;display:none;align-items:center;gap:8px;line-height:1.5}
     .banner.on{display:flex}
     .bwarn{background:var(--al);border:1px solid #FDE68A;color:var(--amber)}
     .berr{background:#FEE2E2;border:1px solid #FCA5A5;color:#B91C1C}
@@ -29,18 +29,12 @@
     .ds{font-size:13px;color:var(--muted)}
     .ds code{display:inline-block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:4px}
     .toolbar{display:flex;align-items:center;justify-content:space-between;margin:28px 0 14px}
-    .cl{font-size:14px;font-weight:500}
-    .cl span{color:var(--muted);font-weight:400}
+    .cl{font-size:14px;font-weight:500}.cl span{color:var(--muted);font-weight:400}
     .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s}
     .btn svg{width:14px;height:14px}
-    .bprimary{background:var(--accent);color:#fff}
-    .bprimary:hover:not(:disabled){background:#333}
-    .bprimary:disabled{background:#ccc;cursor:not-allowed}
-    .boutline{background:var(--surface);color:var(--text);border:1px solid var(--border)}
-    .boutline:hover:not(:disabled){background:var(--bg)}
-    .boutline:disabled{opacity:.4;cursor:not-allowed}
-    .bghost{background:transparent;color:var(--muted);padding:8px 10px}
-    .bghost:hover{color:var(--text);background:var(--bg)}
+    .bprimary{background:var(--accent);color:#fff}.bprimary:hover:not(:disabled){background:#333}.bprimary:disabled{background:#ccc;cursor:not-allowed}
+    .boutline{background:var(--surface);color:var(--text);border:1px solid var(--border)}.boutline:hover:not(:disabled){background:var(--bg)}.boutline:disabled{opacity:.4;cursor:not-allowed}
+    .bghost{background:transparent;color:var(--muted);padding:8px 10px}.bghost:hover{color:var(--text);background:var(--bg)}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:box-shadow .2s;position:relative}
     .card:hover{box-shadow:0 4px 20px rgba(0,0,0,.07)}
@@ -56,17 +50,13 @@
     .se{background:#FEE2E2;color:#B91C1C}.se .dot{background:#B91C1C}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
     .bdl{background:none;border:none;padding:4px;cursor:pointer;color:var(--muted);border-radius:6px;display:grid;place-items:center;transition:all .15s}
-    .bdl:hover:not(:disabled){color:var(--text);background:var(--bg)}
-    .bdl svg{width:14px;height:14px}
-    .bdl:disabled{opacity:.25;cursor:not-allowed}
+    .bdl:hover:not(:disabled){color:var(--text);background:var(--bg)}.bdl svg{width:14px;height:14px}.bdl:disabled{opacity:.25;cursor:not-allowed}
     .bx{position:absolute;top:6px;right:6px;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:6px;width:24px;height:24px;cursor:pointer;display:none;place-items:center;font-size:15px;color:var(--muted);transition:all .15s}
-    .card:hover .bx{display:grid}
-    .bx:hover{color:#B91C1C;background:#FEF2F2;border-color:#FCA5A5}
+    .card:hover .bx{display:grid}.bx:hover{color:#B91C1C;background:#FEF2F2;border-color:#FCA5A5}
     .pw{margin:20px 0 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;display:none}
     .pw.on{display:block}
     .pt{display:flex;justify-content:space-between;margin-bottom:8px}
-    .plbl{font-size:13px;font-weight:500}
-    .pct{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
+    .plbl{font-size:13px;font-weight:500}.pct{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
     .ptrack{height:3px;background:var(--bg);border-radius:99px;overflow:hidden}
     .pfill{height:100%;background:var(--accent);border-radius:99px;transition:width .35s;width:0}
     footer{text-align:center;padding:20px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)}
@@ -84,25 +74,21 @@
   </div>
   <div class="badge">100% Local · No Upload</div>
 </header>
-
 <main>
   <div class="banner bwarn" id="banner">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span id="btxt"></span>
   </div>
-
   <div class="drop-zone" id="dz">
     <input type="file" id="fi" accept="image/*" multiple />
     <div class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
     <div class="dt">Drag & drop foto di sini</div>
     <div class="ds">atau klik untuk pilih file<br><code>JPG · PNG · WEBP</code></div>
   </div>
-
   <div class="pw" id="pw">
     <div class="pt"><span class="plbl" id="plbl">Memproses...</span><span class="pct" id="pct">0/0</span></div>
     <div class="ptrack"><div class="pfill" id="pfill"></div></div>
   </div>
-
   <div class="toolbar" id="tb" style="display:none">
     <span class="cl" id="cl">0 foto <span>ditambahkan</span></span>
     <div style="display:flex;gap:8px">
@@ -117,38 +103,34 @@
       </button>
     </div>
   </div>
-
   <div class="grid" id="grid"></div>
 </main>
-
 <footer>Semua proses dilakukan di browser Anda. Foto tidak dikirim ke server manapun.</footer>
 <div class="notif" id="notif"></div>
 
 <script>
-// ─── State ────────────────────────────────────────────────────────────────────
-const S = { files:[], results:{}, busy:false };
-const g  = id => document.getElementById(id);
+const S={files:[],results:{},busy:false};
+const $=id=>document.getElementById(id);
+const dz=$('dz'),fi=$('fi');
 
-// ─── Upload (plain JS, no module needed) ──────────────────────────────────────
-const dz = g('dz'), fi = g('fi');
-dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('over'));
-dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); add([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'))); });
-fi.addEventListener('change', e => { add([...e.target.files]); fi.value=''; });
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');add([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));});
+fi.addEventListener('change',e=>{add([...e.target.files]);fi.value='';});
 
 function add(files){
   files.forEach(file=>{
-    const id = Math.random().toString(36).slice(2)+Date.now().toString(36);
+    const id=Math.random().toString(36).slice(2)+Date.now().toString(36);
     S.files.push({id,file});
-    card(id,file);
+    mkCard(id,file);
   });
   ui();
 }
 
-function card(id,file){
+function mkCard(id,file){
   const url=URL.createObjectURL(file);
   const el=document.createElement('div');
-  el.className='card'; el.id='card-'+id;
+  el.className='card';el.id='card-'+id;
   el.innerHTML=`
     <button class="bx" onclick="rm('${id}')">×</button>
     <img class="cimg" id="img-${id}" src="${url}">
@@ -161,136 +143,133 @@ function card(id,file){
         </button>
       </div>
     </div>`;
-  g('grid').appendChild(el);
+  $('grid').appendChild(el);
 }
 
-function rm(id){ S.files=S.files.filter(f=>f.id!==id); delete S.results[id]; g('card-'+id)?.remove(); ui(); }
-function clearAll(){ S.files=[]; S.results={}; g('grid').innerHTML=''; ui(); }
+function rm(id){S.files=S.files.filter(f=>f.id!==id);delete S.results[id];$('card-'+id)?.remove();ui();}
+function clearAll(){S.files=[];S.results={};$('grid').innerHTML='';ui();}
 
 function ui(){
   const n=S.files.length;
-  g('tb').style.display=n?'flex':'none';
-  g('cl').innerHTML=`${n} foto <span>ditambahkan</span>`;
-  g('bdla').disabled=!Object.values(S.results).some(Boolean);
-  g('bpr').disabled=S.busy||!n;
+  $('tb').style.display=n?'flex':'none';
+  $('cl').innerHTML=`${n} foto <span>ditambahkan</span>`;
+  $('bdla').disabled=!Object.values(S.results).some(Boolean);
+  $('bpr').disabled=S.busy||!n;
 }
 
 function setSt(id,s){
-  const el=g('st-'+id); if(!el)return;
+  const el=$('st-'+id);if(!el)return;
   const L={waiting:'Menunggu',processing:'Memproses...',done:'Selesai',error:'Gagal'};
-  el.className=`sb s${s[0]}`; // sw sp sd se
+  const cls={waiting:'sw',processing:'sp',done:'sd',error:'se'};
+  el.className=`sb ${cls[s]}`;
   el.innerHTML=`<span class="dot"></span>${L[s]}`;
 }
 
-// ─── Main process (using remove.bg-style canvas approach) ─────────────────────
-// We use the @imgly/background-removal via a worker-friendly dynamic import
-// Fallback: manual threshold-based approach for checkerboard backgrounds
+// ── LOAD LIBRARY via script tag (most reliable method) ────────────────────────
+let bgLib = null;
+
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src=src;
+    s.onload=()=>res();
+    s.onerror=()=>rej(new Error('Failed: '+src));
+    document.head.appendChild(s);
+  });
+}
+
+async function getLib(){
+  if(bgLib) return bgLib;
+  
+  showBanner('Memuat library AI... harap tunggu','bwarn');
+  
+  // Try multiple CDN sources
+  const cdns = [
+    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/index.js',
+    'https://unpkg.com/@imgly/background-removal@1.4.5/dist/browser/index.js',
+  ];
+  
+  let loaded = false;
+  for(const cdn of cdns){
+    try{
+      await loadScript(cdn);
+      // Check if global is available
+      if(typeof imglyRemoveBackground !== 'undefined'){
+        loaded = true;
+        break;
+      }
+    }catch(e){
+      console.warn('CDN failed:', cdn, e);
+    }
+  }
+  
+  if(!loaded || typeof imglyRemoveBackground === 'undefined'){
+    throw new Error('Library tidak dapat dimuat dari semua CDN');
+  }
+  
+  bgLib = imglyRemoveBackground;
+  hideBanner();
+  return bgLib;
+}
 
 async function run(){
   if(S.busy)return;
-  S.busy=true; g('bpr').disabled=true;
-  g('pw').classList.add('on');
+  S.busy=true;$('bpr').disabled=true;
+  $('pw').classList.add('on');
 
-  // Try to load the library
-  let removeFn;
-  try {
-    showBanner('Memuat library AI... (pertama kali ~30MB)', 'bwarn');
-    const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/index.mjs');
-    removeFn = mod.removeBackground;
-    hideBanner();
-  } catch(e1) {
-    try {
-      // fallback cdn
-      const mod2 = await import('https://unpkg.com/@imgly/background-removal@1.4.5/dist/index.mjs');
-      removeFn = mod2.removeBackground;
-      hideBanner();
-    } catch(e2) {
-      // Final fallback: manual checkerboard removal
-      hideBanner();
-      removeFn = null;
-    }
+  let lib;
+  try{
+    lib = await getLib();
+  }catch(e){
+    showBanner('Gagal memuat library AI: '+e.message,'berr');
+    S.busy=false;ui();return;
   }
 
-  const queue = S.files.filter(f=>!S.results[f.id]);
+  const queue=S.files.filter(f=>!S.results[f.id]);
   let done=0;
 
   for(const item of queue){
-    g('plbl').textContent=`Memproses: ${item.file.name}`;
-    g('pct').textContent=`${done}/${queue.length}`;
-    g('pfill').style.width=`${(done/queue.length)*100}%`;
+    $('plbl').textContent=`Memproses: ${item.file.name}`;
+    $('pct').textContent=`${done}/${queue.length}`;
+    $('pfill').style.width=`${(done/queue.length)*100}%`;
     setSt(item.id,'processing');
 
     try{
-      let blob;
-      if(removeFn){
-        blob = await removeFn(item.file, {
-          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/',
-          output: { format:'image/png', quality:1 },
-          progress:(key,cur,tot)=>{
-            if(tot>0){
-              const pct=Math.round(cur/tot*100);
-              if(key.startsWith('fetch')) g('plbl').textContent=`Mengunduh model... ${pct}%`;
-            }
+      const blob = await lib.removeBackground(item.file,{
+        publicPath:'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/',
+        output:{format:'image/png',quality:1},
+        progress:(key,cur,tot)=>{
+          if(tot>0){
+            const pct=Math.round(cur/tot*100);
+            if(key.startsWith('fetch:')) $('plbl').textContent=`Mengunduh model AI... ${pct}%`;
+            else if(key==='compute:inference') $('plbl').textContent=`Memproses ${item.file.name}... ${pct}%`;
           }
-        });
-      } else {
-        // Fallback: remove checkerboard background via canvas
-        blob = await removeCheckerboard(item.file);
-      }
+        }
+      });
       S.results[item.id]=blob;
-      g('img-'+item.id).src=URL.createObjectURL(blob);
+      $('img-'+item.id).src=URL.createObjectURL(blob);
       setSt(item.id,'done');
-      g('dl-'+item.id).disabled=false;
+      $('dl-'+item.id).disabled=false;
     }catch(e){
-      console.error(e);
+      console.error('Process error:',item.file.name,e);
       setSt(item.id,'error');
     }
     done++;
   }
 
-  g('pfill').style.width='100%';
-  g('plbl').textContent=`Selesai! ${done} foto diproses.`;
-  g('pct').textContent=`${done}/${queue.length}`;
-  S.busy=false; ui();
+  $('pfill').style.width='100%';
+  $('plbl').textContent=`Selesai! ${done} foto diproses.`;
+  $('pct').textContent=`${done}/${queue.length}`;
+  S.busy=false;ui();
   toast(`${done} foto selesai`);
 }
 
-// Fallback: remove gray checkerboard (#808080 / light-gray pattern)
-async function removeCheckerboard(file){
-  return new Promise((res,rej)=>{
-    const img=new Image();
-    const url=URL.createObjectURL(file);
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      c.width=img.naturalWidth; c.height=img.naturalHeight;
-      const ctx=c.getContext('2d');
-      ctx.drawImage(img,0,0);
-      const d=ctx.getImageData(0,0,c.width,c.height);
-      const px=d.data;
-      for(let i=0;i<px.length;i+=4){
-        const r=px[i],g2=px[i+1],b=px[i+2];
-        // detect gray checkerboard (values ~128-200, low saturation)
-        const maxC=Math.max(r,g2,b), minC=Math.min(r,g2,b);
-        const sat=maxC===0?0:(maxC-minC)/maxC;
-        const bright=(r+g2+b)/3;
-        if(sat<0.12 && bright>100 && bright<230){
-          px[i+3]=0; // transparent
-        }
-      }
-      ctx.putImageData(d,0,0);
-      c.toBlob(res,'image/png');
-    };
-    img.onerror=rej;
-    img.src=url;
-  });
-}
-
-// ─── Download ─────────────────────────────────────────────────────────────────
 function dlOne(id){
-  const blob=S.results[id]; if(!blob)return;
+  const blob=S.results[id];if(!blob)return;
   const f=S.files.find(x=>x.id===id);
   dl(blob,(f?.file.name||'img').replace(/\.[^.]+$/,'')+'_no_bg.png');
 }
+
 async function dlAll(){
   const done=S.files.filter(f=>S.results[f.id]);
   if(!done.length)return;
@@ -301,12 +280,11 @@ async function dlAll(){
   dl(await zip.generateAsync({type:'blob'}),'bg_removed.zip');
   toast('ZIP diunduh!');
 }
-function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); }
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
-function showBanner(msg,cls){ g('btxt').textContent=msg; const b=g('banner'); b.className=`banner on ${cls}`; }
-function hideBanner(){ g('banner').classList.remove('on'); }
-function toast(msg){ const n=g('notif'); n.textContent=msg; n.classList.add('on'); setTimeout(()=>n.classList.remove('on'),2800); }
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();}
+function showBanner(msg,cls){$('btxt').textContent=msg;const b=$('banner');b.className=`banner on ${cls}`;}
+function hideBanner(){$('banner').classList.remove('on');}
+function toast(msg){const n=$('notif');n.textContent=msg;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),2800);}
 </script>
 </body>
 </html>
