@@ -187,6 +187,45 @@ async function removeBgCanvas(file){
         const imgData=ctx.getImageData(0,0,W,H);
         const px=imgData.data;
 
+        // ── Step 0: Chroma key detection (#00FF00 green screen) ─────────────
+        // If image has solid green #00FF00 background → use exact chroma key removal
+        const chromaR=0, chromaG=255, chromaB=0;
+        const chromaTol=40;
+        let chromaCount=0, totalBorder=0;
+        for(let x=0;x<W;x++){
+          for(const y of [0,1,H-2,H-1]){
+            const i=(y*W+x)*4;
+            if(colorDist(px[i],px[i+1],px[i+2],chromaR,chromaG,chromaB)<chromaTol) chromaCount++;
+            totalBorder++;
+          }
+        }
+        for(let y=0;y<H;y++){
+          for(const x of [0,1,W-2,W-1]){
+            const i=(y*W+x)*4;
+            if(colorDist(px[i],px[i+1],px[i+2],chromaR,chromaG,chromaB)<chromaTol) chromaCount++;
+            totalBorder++;
+          }
+        }
+        const isChromaKey = (chromaCount/totalBorder) > 0.3;
+
+        if(isChromaKey){
+          // Exact chroma key removal — very precise
+          for(let i=0;i<W*H;i++){
+            const r=px[i*4],g=px[i*4+1],b=px[i*4+2];
+            const dist=colorDist(r,g,b,chromaR,chromaG,chromaB);
+            if(dist<chromaTol){
+              px[i*4+3]=0;
+            } else if(dist<chromaTol+20){
+              // Feather edge
+              px[i*4+3]=Math.round(((dist-chromaTol)/20)*255);
+            }
+          }
+          ctx.putImageData(imgData,0,0);
+          c.toBlob(blob=>resolve(blob),'image/png');
+          URL.revokeObjectURL(url);
+          return;
+        }
+
         // ── Step 1: Sample background colors from border region ───────────
         // Sample more aggressively — take all pixels from 3px border
         const bgSamples=[];
@@ -233,11 +272,8 @@ async function removeBgCanvas(file){
         function getTolerance(r,g,b){
           const maxC=Math.max(r,g,b),minC=Math.min(r,g,b);
           const sat=maxC===0?0:(maxC-minC)/maxC;
-          // Gray/neutral bg: more tolerance (checkerboard)
           if(sat<0.15) return 45;
-          // Dark solid bg
           if((r+g+b)/3<60) return 35;
-          // Light solid bg
           if((r+g+b)/3>200) return 40;
           return 30;
         }
