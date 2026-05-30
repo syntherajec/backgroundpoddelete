@@ -295,9 +295,33 @@ async function removeBgCanvas(file){
           }
         }
 
-        // ── Step 3: Remove isolated bg islands (letter counters + small holes) ─
-        // Two passes: small (letter holes) and medium (larger enclosed areas)
+        // ── Step 3: Smart island removal ──────────────────────────────────
+        // Only remove islands that are SURROUNDED by dark pixels (text outline)
+        // This prevents removing holes inside white objects (like panda body)
         const checked=new Uint8Array(W*H);
+
+        function avgBorderBrightness(island, W, H, px) {
+          // Check average brightness of pixels surrounding the island
+          const borderSet = new Set();
+          for(const idx of island){
+            const x=idx%W, y=(idx/W)|0;
+            for(let dy=-1;dy<=1;dy++){
+              for(let dx=-1;dx<=1;dx++){
+                const nx=x+dx, ny=y+dy;
+                if(nx<0||nx>=W||ny<0||ny>=H) continue;
+                const ni=ny*W+nx;
+                if(!island.includes(ni)) borderSet.add(ni);
+              }
+            }
+          }
+          let sum=0, cnt=0;
+          for(const ni of borderSet){
+            const pi=ni*4;
+            sum+=(px[pi]+px[pi+1]+px[pi+2])/3;
+            cnt++;
+          }
+          return cnt>0 ? sum/cnt : 255;
+        }
 
         function removeIslands(maxSize) {
           for(let idx=0;idx<W*H;idx++){
@@ -330,16 +354,19 @@ async function removeBgCanvas(file){
               }
             }
             if(!overflow){
-              for(const i of island) visited[i]=1;
+              // Only remove if surrounded by dark pixels (text outline)
+              // This protects white areas of characters/objects
+              const borderBrightness = avgBorderBrightness(island, W, H, px);
+              if(borderBrightness < 140){
+                // Dark border = inside text/outline → safe to remove
+                for(const i of island) visited[i]=1;
+              }
             }
           }
         }
 
-        // Pass 1: remove small holes (letter counters like O, A, B, D, P, R)
-        removeIslands(W*H*0.015); // up to 1.5% of image area
-        // Pass 2: reset checked, remove medium islands too
-        checked.fill(0);
-        removeIslands(W*H*0.04); // up to 4% of image area
+        // Single pass — removes bg islands enclosed by dark outlines only
+        removeIslands(W*H*0.02);
 
         // ── Step 4: Feather edges (2px smooth transition) ─────────────────
         const alpha=new Float32Array(W*H);
@@ -443,4 +470,3 @@ function toast(msg){const n=$('notif');n.textContent=msg;n.classList.add('on');s
 </script>
 </body>
 </html>
-
