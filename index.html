@@ -157,180 +157,247 @@ function setSt(id,s){
   el.innerHTML=`<span class="dot"></span>${L[s]}`;
 }
 
-// ── CORE: Flood-fill based background removal ─────────────────────────────────
-// Strategy:
-// 1. Detect checkerboard pattern from corners to find bg color
-// 2. Flood fill from all 4 edges to mark background pixels
-// 3. Apply feathered edge (anti-alias) for smooth result
-// 4. Use morphological erosion to clean up tepian
+// ─── Background Removal Engine ────────────────────────────────────────────────
 
-async function removeBgCanvas(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      try {
-        const W = img.naturalWidth, H = img.naturalHeight;
-        const c = document.createElement('canvas');
-        c.width = W; c.height = H;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imgData = ctx.getImageData(0, 0, W, H);
-        const px = imgData.data;
+function colorDist(r1,g1,b1,r2,g2,b2){
+  return Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
+}
 
-        // ── Step 1: Sample background color from corners ──────────────────
-        // Checkerboard has 2 alternating colors — we sample both
-        const samplePoints = [
-          [0,0],[1,0],[0,1],[1,1],
-          [2,0],[3,0],[2,1],[3,1],
-          [W-1,0],[W-2,0],[W-1,1],[W-2,1],
-          [0,H-1],[1,H-1],[0,H-2],[1,H-2],
-          [W-1,H-1],[W-2,H-1],[W-1,H-2],[W-2,H-2]
-        ];
+function isCheckerboard(px, W, x, y){
+  // Check if pixel and its diagonal neighbor form a repeating pattern (checkerboard)
+  const i=(y*W+x)*4;
+  const r=px[i],g=px[i+1],b=px[i+2];
+  // Gray/neutral check: low saturation
+  const maxC=Math.max(r,g,b), minC=Math.min(r,g,b);
+  const sat = maxC===0 ? 0 : (maxC-minC)/maxC;
+  return sat < 0.15; // nearly gray = likely checkerboard
+}
 
-        // Collect bg colors
-        const bgColors = [];
-        for (const [x,y] of samplePoints) {
-          const i = (y * W + x) * 4;
-          bgColors.push([px[i], px[i+1], px[i+2]]);
+async function removeBgCanvas(file){
+  return new Promise((resolve, reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      try{
+        const W=img.naturalWidth, H=img.naturalHeight;
+        const c=document.createElement('canvas');
+        c.width=W; c.height=H;
+        const ctx=c.getContext('2d');
+        ctx.drawImage(img,0,0);
+        const imgData=ctx.getImageData(0,0,W,H);
+        const px=imgData.data;
+
+        // ── Step 1: Sample background colors from border region ───────────
+        // Sample more aggressively — take all pixels from 3px border
+        const bgSamples=[];
+        const borderW = Math.min(4, Math.floor(W*0.02)+1);
+        const borderH = Math.min(4, Math.floor(H*0.02)+1);
+
+        for(let y=0;y<borderH;y++){
+          for(let x=0;x<W;x++){
+            const i=(y*W+x)*4;
+            bgSamples.push([px[i],px[i+1],px[i+2]]);
+          }
+        }
+        for(let y=H-borderH;y<H;y++){
+          for(let x=0;x<W;x++){
+            const i=(y*W+x)*4;
+            bgSamples.push([px[i],px[i+1],px[i+2]]);
+          }
+        }
+        for(let y=0;y<H;y++){
+          for(let x=0;x<borderW;x++){
+            const i=(y*W+x)*4;
+            bgSamples.push([px[i],px[i+1],px[i+2]]);
+          }
+          for(let x=W-borderW;x<W;x++){
+            const i=(y*W+x)*4;
+            bgSamples.push([px[i],px[i+1],px[i+2]]);
+          }
         }
 
-        // ── Step 2: Flood fill from edges ─────────────────────────────────
-        const visited = new Uint8Array(W * H); // 0=unvisited, 1=bg, 2=fg
-        const queue = [];
+        // Cluster bg colors — find dominant colors in border
+        // Use simple approach: group by rounding to nearest 32
+        const colorMap={};
+        for(const [r,g,b] of bgSamples){
+          const key=`${r>>5},${g>>5},${b>>5}`;
+          colorMap[key]=(colorMap[key]||0)+1;
+        }
+        // Top N most frequent border colors = background palette
+        const sortedColors=Object.entries(colorMap)
+          .sort((a,b)=>b[1]-a[1])
+          .slice(0,6)
+          .map(([k])=>k.split(',').map(v=>parseInt(v)<<5));
 
-        function isBg(r, g, b) {
-          for (const [br, bg2, bb] of bgColors) {
-            const dr = r - br, dg = g - bg2, db = b - bb;
-            // Loose tolerance — checkerboard colors
-            if (Math.sqrt(dr*dr + dg*dg + db*db) < 35) return true;
+        // Dynamic tolerance — tighter for colorful bg, looser for gray
+        function getTolerance(r,g,b){
+          const maxC=Math.max(r,g,b),minC=Math.min(r,g,b);
+          const sat=maxC===0?0:(maxC-minC)/maxC;
+          // Gray/neutral bg: more tolerance (checkerboard)
+          if(sat<0.15) return 45;
+          // Dark solid bg
+          if((r+g+b)/3<60) return 35;
+          // Light solid bg
+          if((r+g+b)/3>200) return 40;
+          return 30;
+        }
+
+        function isBg(r,g,b){
+          for(const [br,bg2,bb] of sortedColors){
+            const tol=getTolerance(br,bg2,bb);
+            if(colorDist(r,g,b,br,bg2,bb)<tol) return true;
           }
           return false;
         }
 
-        // Seed from all 4 edges
-        for (let x = 0; x < W; x++) {
-          for (const y of [0, H-1]) {
-            const idx = y * W + x;
-            if (!visited[idx]) {
-              const i = idx * 4;
-              if (isBg(px[i], px[i+1], px[i+2])) {
-                visited[idx] = 1;
-                queue.push(idx);
-              }
-            }
-          }
-        }
-        for (let y = 0; y < H; y++) {
-          for (const x of [0, W-1]) {
-            const idx = y * W + x;
-            if (!visited[idx]) {
-              const i = idx * 4;
-              if (isBg(px[i], px[i+1], px[i+2])) {
-                visited[idx] = 1;
-                queue.push(idx);
-              }
-            }
+        // ── Step 2: Flood fill from ALL edges ─────────────────────────────
+        const visited=new Uint8Array(W*H); // 0=unvisited, 1=bg
+        const queue=[];
+        let head=0;
+
+        function tryAdd(idx){
+          if(visited[idx]) return;
+          const i=idx*4;
+          if(isBg(px[i],px[i+1],px[i+2])){
+            visited[idx]=1;
+            queue.push(idx);
           }
         }
 
-        // BFS flood fill
-        let head = 0;
-        const dirs = [-W, W, -1, 1];
-        while (head < queue.length) {
-          const idx = queue[head++];
-          const x = idx % W, y = (idx / W) | 0;
-          for (const d of dirs) {
-            const ni = idx + d;
-            const nx = ni % W, ny = (ni / W) | 0;
-            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-            if (visited[ni]) continue;
-            // Check for edge wrap
-            if (d === -1 && x === 0) continue;
-            if (d === 1 && x === W-1) continue;
-            const pi = ni * 4;
-            if (isBg(px[pi], px[pi+1], px[pi+2])) {
-              visited[ni] = 1;
-              queue.push(ni);
-            }
-          }
+        for(let x=0;x<W;x++){
+          tryAdd(x);             // top row
+          tryAdd((H-1)*W+x);     // bottom row
+        }
+        for(let y=0;y<H;y++){
+          tryAdd(y*W);           // left col
+          tryAdd(y*W+(W-1));     // right col
         }
 
-        // ── Step 3: Build alpha mask with edge feathering ─────────────────
-        // For each bg pixel, alpha = 0
-        // For border pixels (between fg and bg), smooth transition
-        const alpha = new Float32Array(W * H);
-        for (let i = 0; i < W * H; i++) {
-          alpha[i] = visited[i] === 1 ? 0 : 1;
-        }
-
-        // Feather edges: for fg pixels adjacent to bg, reduce alpha smoothly
-        const featherRadius = 2;
-        const alphaSmooth = new Float32Array(alpha);
-        for (let pass = 0; pass < featherRadius; pass++) {
-          for (let y = 1; y < H-1; y++) {
-            for (let x = 1; x < W-1; x++) {
-              const idx = y * W + x;
-              if (alpha[idx] === 1) {
-                // Check if any neighbor is bg
-                let hasBgNeighbor = false;
-                for (const d of [-W, W, -1, 1]) {
-                  if (alpha[idx + d] < 0.5) { hasBgNeighbor = true; break; }
+        // BFS
+        while(head<queue.length){
+          const idx=queue[head++];
+          const x=idx%W, y=(idx/W)|0;
+          // 8-directional for better coverage (catches diagonal checkerboard)
+          for(let dy=-1;dy<=1;dy++){
+            for(let dx=-1;dx<=1;dx++){
+              if(dx===0&&dy===0) continue;
+              const nx=x+dx, ny=y+dy;
+              if(nx<0||nx>=W||ny<0||ny>=H) continue;
+              const ni=ny*W+nx;
+              if(!visited[ni]){
+                const pi=ni*4;
+                if(isBg(px[pi],px[pi+1],px[pi+2])){
+                  visited[ni]=1;
+                  queue.push(ni);
                 }
-                if (hasBgNeighbor) {
-                  // Smooth based on neighborhood average
-                  let sum = 0, cnt = 0;
-                  for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                      const ni = (y+dy)*W + (x+dx);
-                      if (ni >= 0 && ni < W*H) { sum += alpha[ni]; cnt++; }
-                    }
+              }
+            }
+          }
+        }
+
+        // ── Step 3: Remove small isolated bg islands inside foreground ────
+        // Find connected components of unvisited bg-colored pixels
+        // If component is small → also mark as bg
+        const checked=new Uint8Array(W*H);
+        for(let idx=0;idx<W*H;idx++){
+          if(visited[idx]||checked[idx]) continue;
+          const pi=idx*4;
+          if(!isBg(px[pi],px[pi+1],px[pi+2])) continue;
+          // BFS this island
+          const island=[];
+          const iq=[idx];
+          let ih=0;
+          checked[idx]=1;
+          while(ih<iq.length){
+            const cur=iq[ih++];
+            island.push(cur);
+            if(island.length>800) break; // too large = likely real fg
+            const cx=cur%W, cy=(cur/W)|0;
+            for(let dy=-1;dy<=1;dy++){
+              for(let dx=-1;dx<=1;dx++){
+                if(dx===0&&dy===0) continue;
+                const nx2=cx+dx, ny2=cy+dy;
+                if(nx2<0||nx2>=W||ny2<0||ny2>=H) continue;
+                const ni2=ny2*W+nx2;
+                if(checked[ni2]||visited[ni2]) continue;
+                const pi2=ni2*4;
+                if(isBg(px[pi2],px[pi2+1],px[pi2+2])){
+                  checked[ni2]=1;
+                  iq.push(ni2);
+                }
+              }
+            }
+          }
+          // Small isolated bg island → remove it
+          if(island.length<=800){
+            for(const i of island) visited[i]=1;
+          }
+        }
+
+        // ── Step 4: Feather edges (2px smooth transition) ─────────────────
+        const alpha=new Float32Array(W*H);
+        for(let i=0;i<W*H;i++) alpha[i]=visited[i]?0:1;
+
+        // Gaussian-like edge smoothing
+        for(let pass=0;pass<2;pass++){
+          const tmp=new Float32Array(alpha);
+          for(let y=1;y<H-1;y++){
+            for(let x=1;x<W-1;x++){
+              const idx=y*W+x;
+              if(alpha[idx]>0&&alpha[idx]<1) continue;
+              // Check if on edge
+              let isEdge=false;
+              for(let dy=-1;dy<=1&&!isEdge;dy++){
+                for(let dx=-1;dx<=1&&!isEdge;dx++){
+                  if(alpha[(y+dy)*W+(x+dx)]!==alpha[idx]) isEdge=true;
+                }
+              }
+              if(isEdge){
+                let sum=0;
+                const weights=[1,2,1,2,4,2,1,2,1];
+                let wi=0;
+                for(let dy=-1;dy<=1;dy++){
+                  for(let dx=-1;dx<=1;dx++){
+                    sum+=alpha[(y+dy)*W+(x+dx)]*weights[wi++];
                   }
-                  alphaSmooth[idx] = sum / cnt;
                 }
+                tmp[idx]=sum/16;
               }
             }
           }
-          for (let i = 0; i < W*H; i++) alpha[i] = alphaSmooth[i];
+          for(let i=0;i<W*H;i++) alpha[i]=tmp[i];
         }
 
-        // ── Step 4: Apply alpha to image ──────────────────────────────────
-        for (let i = 0; i < W * H; i++) {
-          px[i * 4 + 3] = Math.round(alpha[i] * 255);
+        // ── Step 5: Apply alpha ───────────────────────────────────────────
+        for(let i=0;i<W*H;i++){
+          px[i*4+3]=Math.round(alpha[i]*255);
         }
 
-        ctx.putImageData(imgData, 0, 0);
-        c.toBlob(blob => resolve(blob), 'image/png');
+        ctx.putImageData(imgData,0,0);
+        c.toBlob(blob=>resolve(blob),'image/png');
         URL.revokeObjectURL(url);
-      } catch(e) {
-        reject(e);
-      }
+      }catch(e){ reject(e); }
     };
-    img.onerror = reject;
-    img.src = url;
+    img.onerror=reject;
+    img.src=url;
   });
 }
 
-// ── Process queue ─────────────────────────────────────────────────────────────
+// ─── Process ──────────────────────────────────────────────────────────────────
 async function run(){
   if(S.busy)return;
   S.busy=true;$('bpr').disabled=true;
   $('pw').classList.add('on');
-
   const queue=S.files.filter(f=>!S.results[f.id]);
   let done=0;
-
   for(const item of queue){
     $('plbl').textContent=`Memproses: ${item.file.name}`;
     $('pct').textContent=`${done}/${queue.length}`;
     $('pfill').style.width=`${(done/queue.length)*100}%`;
     setSt(item.id,'processing');
-
-    // Yield to browser to update UI
-    await new Promise(r => setTimeout(r, 10));
-
+    await new Promise(r=>setTimeout(r,10));
     try{
-      const blob = await removeBgCanvas(item.file);
+      const blob=await removeBgCanvas(item.file);
       S.results[item.id]=blob;
       $('img-'+item.id).src=URL.createObjectURL(blob);
       setSt(item.id,'done');
@@ -341,7 +408,6 @@ async function run(){
     }
     done++;
   }
-
   $('pfill').style.width='100%';
   $('plbl').textContent=`Selesai! ${done} foto diproses.`;
   $('pct').textContent=`${done}/${queue.length}`;
@@ -349,7 +415,7 @@ async function run(){
   toast(`${done} foto selesai`);
 }
 
-// ── Download ──────────────────────────────────────────────────────────────────
+// ─── Download ─────────────────────────────────────────────────────────────────
 function dlOne(id){
   const blob=S.results[id];if(!blob)return;
   const f=S.files.find(x=>x.id===id);
