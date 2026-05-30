@@ -295,44 +295,51 @@ async function removeBgCanvas(file){
           }
         }
 
-        // ── Step 3: Remove small isolated bg islands inside foreground ────
-        // Find connected components of unvisited bg-colored pixels
-        // If component is small → also mark as bg
+        // ── Step 3: Remove isolated bg islands (letter counters + small holes) ─
+        // Two passes: small (letter holes) and medium (larger enclosed areas)
         const checked=new Uint8Array(W*H);
-        for(let idx=0;idx<W*H;idx++){
-          if(visited[idx]||checked[idx]) continue;
-          const pi=idx*4;
-          if(!isBg(px[pi],px[pi+1],px[pi+2])) continue;
-          // BFS this island
-          const island=[];
-          const iq=[idx];
-          let ih=0;
-          checked[idx]=1;
-          while(ih<iq.length){
-            const cur=iq[ih++];
-            island.push(cur);
-            if(island.length>800) break; // too large = likely real fg
-            const cx=cur%W, cy=(cur/W)|0;
-            for(let dy=-1;dy<=1;dy++){
-              for(let dx=-1;dx<=1;dx++){
-                if(dx===0&&dy===0) continue;
-                const nx2=cx+dx, ny2=cy+dy;
-                if(nx2<0||nx2>=W||ny2<0||ny2>=H) continue;
-                const ni2=ny2*W+nx2;
-                if(checked[ni2]||visited[ni2]) continue;
-                const pi2=ni2*4;
-                if(isBg(px[pi2],px[pi2+1],px[pi2+2])){
-                  checked[ni2]=1;
-                  iq.push(ni2);
+
+        function removeIslands(maxSize) {
+          for(let idx=0;idx<W*H;idx++){
+            if(visited[idx]||checked[idx]) continue;
+            const pi=idx*4;
+            if(!isBg(px[pi],px[pi+1],px[pi+2])) continue;
+            const island=[];
+            const iq=[idx];
+            let ih=0;
+            checked[idx]=1;
+            let overflow=false;
+            while(ih<iq.length){
+              const cur=iq[ih++];
+              island.push(cur);
+              if(island.length>maxSize){overflow=true;break;}
+              const cx=cur%W, cy=(cur/W)|0;
+              for(let dy=-1;dy<=1;dy++){
+                for(let dx=-1;dx<=1;dx++){
+                  if(dx===0&&dy===0) continue;
+                  const nx2=cx+dx, ny2=cy+dy;
+                  if(nx2<0||nx2>=W||ny2<0||ny2>=H) continue;
+                  const ni2=ny2*W+nx2;
+                  if(checked[ni2]||visited[ni2]) continue;
+                  const pi2=ni2*4;
+                  if(isBg(px[pi2],px[pi2+1],px[pi2+2])){
+                    checked[ni2]=1;
+                    iq.push(ni2);
+                  }
                 }
               }
             }
-          }
-          // Small isolated bg island → remove it
-          if(island.length<=800){
-            for(const i of island) visited[i]=1;
+            if(!overflow){
+              for(const i of island) visited[i]=1;
+            }
           }
         }
+
+        // Pass 1: remove small holes (letter counters like O, A, B, D, P, R)
+        removeIslands(W*H*0.015); // up to 1.5% of image area
+        // Pass 2: reset checked, remove medium islands too
+        checked.fill(0);
+        removeIslands(W*H*0.04); // up to 4% of image area
 
         // ── Step 4: Feather edges (2px smooth transition) ─────────────────
         const alpha=new Float32Array(W*H);
