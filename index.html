@@ -31,7 +31,6 @@
     .drop-sub { font-size: 14px; color: var(--muted); line-height: 1.6; }
     .drop-sub span { display: inline-block; margin-top: 6px; font-family: 'DM Mono', monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; }
     .toolbar { display: flex; align-items: center; justify-content: space-between; margin: 32px 0 16px; padding: 0 2px; }
-    .toolbar-left { display: flex; align-items: center; gap: 12px; }
     .count-label { font-size: 14px; font-weight: 500; }
     .count-label span { color: var(--muted); font-weight: 400; }
     .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
@@ -76,6 +75,8 @@
     .progress-count { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
     .progress-bar-track { height: 4px; background: var(--bg); border-radius: 99px; overflow: hidden; }
     .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s ease; width: 0%; }
+    .init-banner { background: var(--amber-light); border: 1px solid #FDE68A; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--amber); margin-bottom: 20px; display: none; }
+    .init-banner.visible { display: flex; align-items: center; gap: 8px; }
     footer { text-align: center; padding: 24px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
     .notif { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: white; padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 100; }
     .notif.show { transform: translateY(0); opacity: 1; }
@@ -95,6 +96,11 @@
 </header>
 
 <main>
+  <div class="init-banner" id="initBanner">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span id="initText">Memuat model AI, harap tunggu...</span>
+  </div>
+
   <div class="drop-zone" id="dropZone">
     <input type="file" id="fileInput" accept="image/*" multiple />
     <div class="drop-icon">
@@ -115,9 +121,7 @@
   </div>
 
   <div class="toolbar" id="toolbar" style="display:none">
-    <div class="toolbar-left">
-      <span class="count-label" id="countLabel">0 foto <span>dipilih</span></span>
-    </div>
+    <div><span class="count-label" id="countLabel">0 foto <span>ditambahkan</span></span></div>
     <div style="display:flex; gap:8px;">
       <button class="btn btn-ghost" onclick="clearAll()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
@@ -140,54 +144,46 @@
 <footer>Semua pemrosesan dilakukan di browser Anda. Foto tidak dikirim ke server manapun.</footer>
 <div class="notif" id="notif"></div>
 
-<script type="module">
-  import { removeBackground as removeBgLib } from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/index.mjs';
+<script>
+  // State & DOM refs
+  const state = { files: [], results: {}, processing: false, libLoaded: false, libLoading: false };
+  const $ = id => document.getElementById(id);
+  const dropZone = $('dropZone'), fileInput = $('fileInput'), grid = $('grid');
+  const toolbar = $('toolbar'), btnProcess = $('btnProcess'), btnDownloadAll = $('btnDownloadAll');
+  const progressWrap = $('progressWrap'), progressFill = $('progressFill');
+  const progressCount = $('progressCount'), progressLabel = $('progressLabel');
+  const countLabel = $('countLabel'), initBanner = $('initBanner'), initText = $('initText');
 
-  const PUBLIC_PATH = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/browser/';
-
-  const state = { files: [], results: {}, processing: false };
-
-  const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-  const grid = document.getElementById('grid');
-  const toolbar = document.getElementById('toolbar');
-  const btnProcess = document.getElementById('btnProcess');
-  const btnDownloadAll = document.getElementById('btnDownloadAll');
-  const progressWrap = document.getElementById('progressWrap');
-  const progressFill = document.getElementById('progressFill');
-  const progressCount = document.getElementById('progressCount');
-  const progressLabel = document.getElementById('progressLabel');
-  const countLabel = document.getElementById('countLabel');
-
+  // UPLOAD - vanilla JS (no module, no dependency)
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
   dropZone.addEventListener('drop', e => {
     e.preventDefault(); dropZone.classList.remove('drag-over');
-    addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+    handleFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
   });
-  fileInput.addEventListener('change', e => { addFiles(Array.from(e.target.files)); fileInput.value = ''; });
+  fileInput.addEventListener('change', e => { handleFiles(Array.from(e.target.files)); fileInput.value = ''; });
 
-  function addFiles(newFiles) {
-    newFiles.forEach(file => {
-      const id = Date.now() + Math.random().toString(36).slice(2);
-      state.files.push({ id, file, status: 'waiting' });
-      renderCard({ id, file });
+  function handleFiles(files) {
+    files.forEach(file => {
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      state.files.push({ id, file });
+      renderCard(id, file);
     });
     updateUI();
   }
 
-  function renderCard(item) {
-    const url = URL.createObjectURL(item.file);
+  function renderCard(id, file) {
+    const url = URL.createObjectURL(file);
     const card = document.createElement('div');
-    card.className = 'card'; card.id = 'card-' + item.id;
+    card.className = 'card'; card.id = 'card-' + id;
     card.innerHTML = `
-      <button class="btn-remove" onclick="window._removeCard('${item.id}')">×</button>
-      <img class="card-img" id="img-${item.id}" src="${url}" />
+      <button class="btn-remove" onclick="removeCard('${id}')">×</button>
+      <img class="card-img" id="img-${id}" src="${url}" />
       <div class="card-body">
-        <div class="card-name" title="${item.file.name}">${item.file.name}</div>
+        <div class="card-name" title="${file.name}">${file.name}</div>
         <div class="card-status">
-          <span class="status-badge status-waiting" id="status-${item.id}"><span class="dot"></span> Menunggu</span>
-          <button class="btn-download" id="dl-${item.id}" disabled title="Download" onclick="window._downloadSingle('${item.id}')">
+          <span class="status-badge status-waiting" id="status-${id}"><span class="dot"></span> Menunggu</span>
+          <button class="btn-download" id="dl-${id}" disabled onclick="downloadOne('${id}')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
         </div>
@@ -195,40 +191,56 @@
     grid.appendChild(card);
   }
 
-  window._removeCard = function(id) {
+  function removeCard(id) {
     state.files = state.files.filter(f => f.id !== id);
     delete state.results[id];
-    const card = document.getElementById('card-' + id);
-    if (card) card.remove();
+    const el = $('card-' + id); if (el) el.remove();
     updateUI();
-  };
+  }
 
-  window.clearAll = function() {
-    state.files = []; state.results = {}; grid.innerHTML = ''; updateUI();
-  };
+  function clearAll() { state.files = []; state.results = {}; grid.innerHTML = ''; updateUI(); }
 
   function updateUI() {
-    const count = state.files.length;
-    toolbar.style.display = count > 0 ? 'flex' : 'none';
-    countLabel.innerHTML = `${count} foto <span>ditambahkan</span>`;
-    const doneCount = Object.values(state.results).filter(Boolean).length;
-    btnDownloadAll.disabled = doneCount === 0;
-    btnProcess.disabled = state.processing || count === 0;
+    const n = state.files.length;
+    toolbar.style.display = n > 0 ? 'flex' : 'none';
+    countLabel.innerHTML = `${n} foto <span>ditambahkan</span>`;
+    btnDownloadAll.disabled = !Object.values(state.results).some(Boolean);
+    btnProcess.disabled = state.processing || n === 0;
   }
 
   function setStatus(id, status) {
-    const badge = document.getElementById('status-' + id);
-    if (!badge) return;
-    const labels = { waiting: 'Menunggu', processing: 'Memproses...', done: 'Selesai', error: 'Gagal' };
-    badge.className = `status-badge status-${status}`;
-    badge.innerHTML = `<span class="dot"></span> ${labels[status]}`;
+    const el = $('status-' + id); if (!el) return;
+    const labels = { waiting:'Menunggu', processing:'Memproses...', done:'Selesai', error:'Gagal' };
+    el.className = `status-badge status-${status}`;
+    el.innerHTML = `<span class="dot"></span> ${labels[status]}`;
   }
 
-  window.startProcessing = async function() {
+  // Load library lazily via dynamic import
+  let _removeBg = null;
+  async function loadLib() {
+    if (_removeBg) return _removeBg;
+    initBanner.classList.add('visible');
+    initText.textContent = 'Memuat library AI...';
+    // Use esm.sh as it properly handles ESM with dependencies
+    const mod = await import('https://esm.sh/@imgly/background-removal@1.4.5');
+    _removeBg = mod.removeBackground;
+    initBanner.classList.remove('visible');
+    return _removeBg;
+  }
+
+  async function startProcessing() {
     if (state.processing) return;
-    state.processing = true;
-    btnProcess.disabled = true;
+    state.processing = true; btnProcess.disabled = true;
     progressWrap.classList.add('visible');
+
+    let removeBg;
+    try {
+      removeBg = await loadLib();
+    } catch(e) {
+      initText.textContent = 'Gagal memuat library: ' + e.message;
+      initBanner.classList.add('visible');
+      state.processing = false; updateUI(); return;
+    }
 
     const queue = state.files.filter(f => !state.results[f.id]);
     let done = 0;
@@ -240,70 +252,60 @@
       setStatus(item.id, 'processing');
 
       try {
-        const blob = await removeBgLib(item.file, {
-          publicPath: PUBLIC_PATH,
+        const blob = await removeBg(item.file, {
+          publicPath: 'https://esm.sh/@imgly/background-removal@1.4.5/',
           output: { format: 'image/png', quality: 1 },
-          progress: (key, current, total) => {
-            if (key === 'compute:inference' && total > 0) {
-              const pct = Math.round((current / total) * 100);
-              progressLabel.textContent = `Memproses ${item.file.name} (${pct}%)`;
-            } else if (key.startsWith('fetch') && total > 0) {
-              const pct = Math.round((current / total) * 100);
-              progressLabel.textContent = `Memuat model AI... ${pct}%`;
+          progress: (key, cur, tot) => {
+            if (tot > 0) {
+              const pct = Math.round((cur/tot)*100);
+              if (key.startsWith('fetch')) progressLabel.textContent = `Memuat model AI... ${pct}%`;
+              else if (key === 'compute:inference') progressLabel.textContent = `Memproses ${item.file.name}... ${pct}%`;
             }
           }
         });
         state.results[item.id] = blob;
-        document.getElementById('img-' + item.id).src = URL.createObjectURL(blob);
+        $('img-' + item.id).src = URL.createObjectURL(blob);
         setStatus(item.id, 'done');
-        document.getElementById('dl-' + item.id).disabled = false;
-      } catch (err) {
-        console.error('Error processing', item.file.name, err);
+        $('dl-' + item.id).disabled = false;
+      } catch(err) {
+        console.error(item.file.name, err);
         setStatus(item.id, 'error');
       }
       done++;
     }
 
-    progressCount.textContent = `${done} / ${queue.length}`;
     progressFill.style.width = '100%';
     progressLabel.textContent = `Selesai! ${done} foto diproses.`;
-    state.processing = false;
-    updateUI();
-    showNotif(`${done} foto berhasil diproses`);
-  };
+    progressCount.textContent = `${done} / ${queue.length}`;
+    state.processing = false; updateUI();
+    showNotif(`${done} foto selesai diproses`);
+  }
 
-  window._downloadSingle = function(id) {
-    const blob = state.results[id];
-    if (!blob) return;
+  function downloadOne(id) {
+    const blob = state.results[id]; if (!blob) return;
     const item = state.files.find(f => f.id === id);
-    const name = item ? item.file.name.replace(/\.[^.]+$/, '') + '_no_bg.png' : 'result.png';
-    triggerDownload(blob, name);
-  };
+    const name = (item?.file.name || 'image').replace(/\.[^.]+$/, '') + '_no_bg.png';
+    dl(blob, name);
+  }
 
-  window.downloadAll = async function() {
+  async function downloadAll() {
     const done = state.files.filter(f => state.results[f.id]);
     if (!done.length) return;
-    if (done.length === 1) { window._downloadSingle(done[0].id); return; }
+    if (done.length === 1) { downloadOne(done[0].id); return; }
     showNotif('Membuat ZIP...');
     const zip = new JSZip();
-    done.forEach(item => {
-      zip.file(item.file.name.replace(/\.[^.]+$/, '') + '_no_bg.png', state.results[item.id]);
-    });
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    triggerDownload(zipBlob, 'bg_removed.zip');
+    done.forEach(item => zip.file(item.file.name.replace(/\.[^.]+$/, '') + '_no_bg.png', state.results[item.id]));
+    dl(await zip.generateAsync({ type: 'blob' }), 'bg_removed.zip');
     showNotif('ZIP berhasil diunduh!');
-  };
+  }
 
-  function triggerDownload(blob, filename) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename; a.click();
+  function dl(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   }
 
   function showNotif(msg) {
-    const notif = document.getElementById('notif');
-    notif.textContent = msg; notif.classList.add('show');
-    setTimeout(() => notif.classList.remove('show'), 2800);
+    const n = $('notif'); n.textContent = msg; n.classList.add('show');
+    setTimeout(() => n.classList.remove('show'), 2800);
   }
 </script>
 </body>
