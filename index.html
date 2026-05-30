@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <title>BG Remover - Hapus Background dengan AI</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -103,7 +106,7 @@
 <main>
   <div class="init-banner" id="initBanner">
     <div class="loading-spinner"></div>
-    <span id="initText">Memuat model AI, harap tunggu...</span>
+    <span id="initText">Memuat model AI (BodyPix), harap tunggu...</span>
   </div>
 
   <div class="drop-zone" id="dropZone">
@@ -129,15 +132,15 @@
     <div><span class="count-label" id="countLabel">0 foto <span>ditambahkan</span></span></div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-ghost" id="clearAllBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         Hapus Semua
       </button>
       <button class="btn btn-outline" id="btnDownloadAll" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download Semua
       </button>
       <button class="btn btn-primary" id="btnProcess">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Proses Semua
       </button>
     </div>
@@ -146,7 +149,7 @@
   <div class="grid" id="grid"></div>
 </main>
 
-<footer>⚠️ Pemrosesan menggunakan AI di browser Anda. Gambar tidak dikirim ke server manapun.</footer>
+<footer>Menggunakan TensorFlow.js & BodyPix untuk segmentasi tubuh manusia. Pemrosesan 100% di browser Anda.</footer>
 <div class="notif" id="notif"></div>
 
 <script>
@@ -154,8 +157,8 @@
   const state = { 
     files: [], 
     results: {}, 
-    processing: false, 
-    cancelProcessing: false
+    processing: false,
+    net: null
   };
   
   // ==================== DOM ELEMENTS ====================
@@ -191,11 +194,11 @@
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     
     if (!validTypes.includes(file.type)) {
-      showNotif(`❌ ${file.name}: Format tidak didukung (hanya JPG, PNG, WEBP)`, true);
+      showNotif(`❌ ${file.name}: Format tidak didukung`, true);
       return false;
     }
     if (file.size > maxSize) {
-      showNotif(`❌ ${file.name}: Ukuran terlalu besar (maks 10MB)`, true);
+      showNotif(`❌ ${file.name}: Maks 10MB`, true);
       return false;
     }
     return true;
@@ -249,7 +252,6 @@
     const el = $('card-' + id);
     if (el) el.remove();
     updateUI();
-    showNotif(`🗑️ Gambar dihapus`);
   }
 
   function clearAll() {
@@ -280,102 +282,113 @@
     const labels = { waiting: 'Menunggu', processing: 'Memproses...', done: 'Selesai', error: errorMsg || 'Gagal' };
     el.className = `status-badge status-${status}`;
     el.innerHTML = `<span class="dot"></span> ${labels[status]}`;
-    if (status === 'error') el.title = errorMsg;
   }
 
-  // ==================== REMOVE BACKGROUND USING CANVAS + TRANSFORM ====================
-  // Menggunakan pendekatan alternatif: segmentasi dengan konversi ke chroma key sederhana
-  // Ini lebih ringan dan tidak memerlukan download model AI
-  
-  async function removeBackgroundSimple(imageFile) {
+  // ==================== BODY SEGMENTATION ====================
+  async function loadModel() {
+    if (state.net) return state.net;
+    
+    initBanner.classList.add('visible');
+    initText.textContent = 'Memuat model BodyPix (sekitar 10MB)...';
+    
+    try {
+      // Load the BodyPix model
+      const net = await bodyPix.load({
+        architecture: 'MobileNetV1',
+        outputStride: 16,
+        multiplier: 0.75,
+        quantBytes: 2
+      });
+      
+      state.net = net;
+      initBanner.classList.remove('visible');
+      showNotif('✅ Model AI siap digunakan!');
+      return net;
+    } catch (error) {
+      console.error('Failed to load model:', error);
+      initBanner.classList.add('error');
+      initText.textContent = '❌ Gagal memuat model. Refresh halaman dan coba lagi.';
+      showNotif('❌ Gagal memuat model AI', true);
+      throw error;
+    }
+  }
+
+  async function removeBackground(imageFile, net) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(imageFile);
       
-      img.onload = () => {
+      img.onload = async () => {
         URL.revokeObjectURL(url);
         
-        // Create canvas with original dimensions
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        // Draw original image
-        ctx.drawImage(img, 0, 0);
-        
-        // Get image data
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // Simple background removal based on edge detection and color analysis
-        // This is a basic implementation - for better results, we'd use a proper ML model
-        // But since the original library had CDN issues, this provides a working alternative
-        
-        // Create a mask based on edge detection
-        const width = canvas.width;
-        const height = canvas.height;
-        
-        // Create a separate canvas for the mask
-        const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = width;
-        maskCanvas.height = height;
-        const maskCtx = maskCanvas.getContext('2d');
-        
-        // Draw image on mask canvas
-        maskCtx.drawImage(img, 0, 0);
-        const maskData = maskCtx.getImageData(0, 0, width, height);
-        const maskPixels = maskData.data;
-        
-        // Simple heuristic: assume background is at the edges
-        // Sample background color from the four corners
-        const samples = [
-          { x: 0, y: 0 },
-          { x: width - 1, y: 0 },
-          { x: 0, y: height - 1 },
-          { x: width - 1, y: height - 1 }
-        ];
-        
-        let bgR = 0, bgG = 0, bgB = 0;
-        samples.forEach(sample => {
-          const idx = (sample.y * width + sample.x) * 4;
-          bgR += maskPixels[idx];
-          bgG += maskPixels[idx + 1];
-          bgB += maskPixels[idx + 2];
-        });
-        bgR /= 4;
-        bgG /= 4;
-        bgB /= 4;
-        
-        // Threshold for background detection
-        const threshold = 50;
-        
-        // Apply transparency based on similarity to background color
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
+        try {
+          // Resize if too large for performance
+          let width = img.width;
+          let height = img.height;
+          const maxDimension = 800;
           
-          // Calculate color difference
-          const diff = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
-          
-          // If color is similar to background, make transparent
-          if (diff < threshold) {
-            data[i + 3] = 0; // Set alpha to 0
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height * maxDimension) / width;
+              width = maxDimension;
+            } else {
+              width = (width * maxDimension) / height;
+              height = maxDimension;
+            }
           }
+          
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Get segmentation
+          const segmentation = await net.segmentPerson(canvas, {
+            flipHorizontal: false,
+            internalResolution: 'medium',
+            segmentationThreshold: 0.7
+          });
+          
+          // Create output canvas
+          const outputCanvas = document.createElement('canvas');
+          outputCanvas.width = width;
+          outputCanvas.height = height;
+          const outputCtx = outputCanvas.getContext('2d');
+          
+          // Draw original image
+          outputCtx.drawImage(img, 0, 0, width, height);
+          
+          // Get image data
+          const imageData = outputCtx.getImageData(0, 0, width, height);
+          const data = imageData.data;
+          
+          // Apply mask based on segmentation
+          const mask = segmentation.data;
+          
+          for (let i = 0; i < mask.length; i++) {
+            if (mask[i] === 0) {
+              // Make background transparent
+              data[i * 4 + 3] = 0;
+            }
+          }
+          
+          // Put back the modified image data
+          outputCtx.putImageData(imageData, 0, 0);
+          
+          // Convert to blob
+          outputCanvas.toBlob(blob => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Gagal konversi ke PNG'));
+            }
+          }, 'image/png');
+          
+        } catch (err) {
+          reject(err);
         }
-        
-        // Put the modified image data back
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Convert canvas to blob
-        canvas.toBlob(blob => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Gagal memproses gambar'));
-          }
-        }, 'image/png');
       };
       
       img.onerror = () => {
@@ -386,89 +399,6 @@
       img.src = url;
     });
   }
-  
-  // Alternative: Use a Web Worker with a more sophisticated approach
-  // But for simplicity and to avoid CDN issues, we'll use a canvas-based approach
-  // that works offline and doesn't require external dependencies
-  
-  // For better results, we'll also provide an option to use a CDN-based solution
-  // with correct configuration if the user has internet
-  
-  let useSimpleMethod = true;
-  
-  async function loadAdvancedModel() {
-    // Try to load the advanced model, but fallback to simple method if it fails
-    try {
-      initText.textContent = 'Mencoba memuat model AI canggih...';
-      
-      // Try multiple CDN configurations
-      const configs = [
-        {
-          url: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/background-removal.esm.js',
-          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/'
-        },
-        {
-          url: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/background-removal.esm.js',
-          publicPath: 'https://unpkg.com/@imgly/background-removal@1.4.5/dist/'
-        }
-      ];
-      
-      for (const config of configs) {
-        try {
-          const module = await import(config.url);
-          if (module.removeBackground) {
-            return {
-              removeBg: module.removeBackground,
-              config: { publicPath: config.publicPath }
-            };
-          }
-        } catch (e) {
-          console.warn(`Failed with ${config.url}:`, e);
-        }
-      }
-      
-      throw new Error('All CDNs failed');
-    } catch (e) {
-      console.warn('Advanced model unavailable, using simple method:', e);
-      return null;
-    }
-  }
-  
-  let advancedRemover = null;
-  
-  async function processImage(imageFile) {
-    if (advancedRemover) {
-      try {
-        return await advancedRemover.removeBg(imageFile, {
-          publicPath: advancedRemover.config.publicPath,
-          output: { format: 'image/png' }
-        });
-      } catch (e) {
-        console.warn('Advanced method failed, falling back to simple:', e);
-        return await removeBackgroundSimple(imageFile);
-      }
-    } else {
-      return await removeBackgroundSimple(imageFile);
-    }
-  }
-  
-  // Try to load advanced model in background
-  setTimeout(async () => {
-    try {
-      const advanced = await loadAdvancedModel();
-      if (advanced) {
-        advancedRemover = advanced;
-        initBanner.classList.remove('visible');
-        showNotif('✅ Model AI canggih siap digunakan!');
-      } else {
-        initBanner.classList.remove('visible');
-        showNotif('ℹ️ Menggunakan metode sederhana (tanpa download)');
-      }
-    } catch (e) {
-      initBanner.classList.remove('visible');
-      showNotif('ℹ️ Menggunakan metode pemrosesan lokal', false);
-    }
-  }, 1000);
 
   // ==================== PROCESSING ====================
   async function startProcessing() {
@@ -478,12 +408,19 @@
     }
     
     if (state.files.length === 0) {
-      showNotif('⚠️ Tidak ada gambar untuk diproses', true);
+      showNotif('⚠️ Tidak ada gambar', true);
+      return;
+    }
+    
+    let net;
+    try {
+      net = await loadModel();
+    } catch (e) {
+      showNotif('❌ Model tidak tersedia', true);
       return;
     }
     
     state.processing = true;
-    state.cancelProcessing = false;
     btnProcess.disabled = true;
     btnProcess.textContent = '⏳ Memproses...';
     progressWrap.classList.add('visible');
@@ -493,11 +430,6 @@
     let successful = 0;
     
     for (let i = 0; i < toProcess.length; i++) {
-      if (state.cancelProcessing) {
-        showNotif('⏹️ Proses dibatalkan');
-        break;
-      }
-      
       const item = toProcess[i];
       progressLabel.textContent = `Memproses: ${item.file.name.substring(0, 50)}`;
       progressCount.textContent = `${processed} / ${toProcess.length}`;
@@ -505,7 +437,7 @@
       setStatus(item.id, 'processing');
       
       try {
-        const resultBlob = await processImage(item.file);
+        const resultBlob = await removeBackground(item.file, net);
         
         state.results[item.id] = resultBlob;
         
@@ -521,19 +453,18 @@
         if (downloadBtn) downloadBtn.disabled = false;
         
         successful++;
-        showNotif(`✅ ${item.file.name.substring(0, 30)} selesai`);
         
       } catch (err) {
-        console.error(`Error processing ${item.file.name}:`, err);
-        setStatus(item.id, 'error', err.message || 'Gagal diproses');
-        showNotif(`❌ ${item.file.name.substring(0, 30)}: Gagal`, true);
+        console.error(`Error: ${item.file.name}`, err);
+        setStatus(item.id, 'error', err.message);
+        showNotif(`❌ ${item.file.name.substring(0, 30)} gagal`, true);
       }
       
       processed++;
     }
     
     progressFill.style.width = '100%';
-    progressLabel.textContent = `Selesai! ${successful} dari ${toProcess.length} gambar berhasil diproses.`;
+    progressLabel.textContent = `Selesai! ${successful} dari ${toProcess.length} gambar berhasil.`;
     progressCount.textContent = `${processed} / ${toProcess.length}`;
     
     state.processing = false;
@@ -573,7 +504,7 @@
   async function downloadAll() {
     const doneItems = state.files.filter(f => state.results[f.id]);
     if (doneItems.length === 0) {
-      showNotif('⚠️ Tidak ada hasil untuk diunduh', true);
+      showNotif('⚠️ Tidak ada hasil', true);
       return;
     }
     
@@ -582,15 +513,9 @@
       return;
     }
     
-    showNotif('📦 Membuat file ZIP...');
+    showNotif('📦 Membuat ZIP...');
     
     try {
-      const JSZip = window.JSZip;
-      if (!JSZip) {
-        showNotif('❌ Library ZIP tidak tersedia', true);
-        return;
-      }
-      
       const zip = new JSZip();
       
       for (const item of doneItems) {
@@ -601,10 +526,10 @@
       
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       downloadBlob(zipBlob, 'bg_removed_images.zip');
-      showNotif(`📦 ZIP berhasil diunduh (${doneItems.length} file)`);
+      showNotif(`📦 ZIP siap (${doneItems.length} file)`);
     } catch (err) {
-      console.error('ZIP creation failed:', err);
-      showNotif('❌ Gagal membuat file ZIP', true);
+      console.error(err);
+      showNotif('❌ Gagal membuat ZIP', true);
     }
   }
 
@@ -613,7 +538,7 @@
     const validFiles = files.filter(validateFile);
     
     if (validFiles.length === 0) {
-      if (files.length > 0) showNotif('⚠️ Tidak ada file valid yang dipilih', true);
+      if (files.length > 0) showNotif('⚠️ Tidak ada file valid', true);
       return;
     }
     
@@ -662,13 +587,10 @@
     cleanupObjectURLs();
   });
   
-  // Hide init banner after 3 seconds if still loading
+  // Pre-load model on page load
   setTimeout(() => {
-    if (initBanner.classList.contains('visible')) {
-      initBanner.classList.remove('visible');
-      showNotif('ℹ️ Menggunakan metode pemrosesan lokal sederhana', false);
-    }
-  }, 5000);
+    loadModel().catch(console.warn);
+  }, 1000);
 </script>
 </body>
 </html>
