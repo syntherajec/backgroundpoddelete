@@ -209,17 +209,64 @@ async function removeBgCanvas(file){
         const isChromaKey = (chromaCount/totalBorder) > 0.3;
 
         if(isChromaKey){
-          // Exact chroma key removal — very precise
+          // Step A: Build raw alpha mask
+          const alpha=new Float32Array(W*H);
           for(let i=0;i<W*H;i++){
             const r=px[i*4],g=px[i*4+1],b=px[i*4+2];
             const dist=colorDist(r,g,b,chromaR,chromaG,chromaB);
-            if(dist<chromaTol){
-              px[i*4+3]=0;
-            } else if(dist<chromaTol+20){
-              // Feather edge
-              px[i*4+3]=Math.round(((dist-chromaTol)/20)*255);
+            if(dist<chromaTol) alpha[i]=0;
+            else if(dist<chromaTol+30) alpha[i]=(dist-chromaTol)/30;
+            else alpha[i]=1;
+          }
+
+          // Step B: Morphological erosion — shrink fg slightly to remove green fringe
+          const eroded=new Float32Array(alpha);
+          const eR=2; // erode radius
+          for(let y=eR;y<H-eR;y++){
+            for(let x=eR;x<W-eR;x++){
+              const idx=y*W+x;
+              if(alpha[idx]===0) continue;
+              // Find min alpha in neighborhood
+              let minA=1;
+              for(let dy=-eR;dy<=eR;dy++){
+                for(let dx=-eR;dx<=eR;dx++){
+                  const ni=(y+dy)*W+(x+dx);
+                  if(alpha[ni]<minA) minA=alpha[ni];
+                }
+              }
+              eroded[idx]=minA;
             }
           }
+
+          // Step C: Gaussian blur on alpha for smooth edge
+          const smooth=new Float32Array(eroded);
+          const kernel=[1,4,7,4,1, 4,16,26,16,4, 7,26,41,26,7, 4,16,26,16,4, 1,4,7,4,1];
+          const kSum=273;
+          for(let y=2;y<H-2;y++){
+            for(let x=2;x<W-2;x++){
+              const idx=y*W+x;
+              if(eroded[idx]===0||eroded[idx]===1) continue;
+              let sum=0,ki=0;
+              for(let dy=-2;dy<=2;dy++){
+                for(let dx=-2;dx<=2;dx++){
+                  sum+=eroded[(y+dy)*W+(x+dx)]*kernel[ki++];
+                }
+              }
+              smooth[idx]=sum/kSum;
+            }
+          }
+
+          // Step D: Spill suppression — remove green tint from edge pixels
+          for(let i=0;i<W*H;i++){
+            if(smooth[i]>0&&smooth[i]<1){
+              // Desaturate green channel at edges
+              const r=px[i*4],g=px[i*4+1],b=px[i*4+2];
+              const avg=(r+b)/2;
+              if(g>avg) px[i*4+1]=Math.round(g*(smooth[i])+avg*(1-smooth[i]));
+            }
+            px[i*4+3]=Math.round(smooth[i]*255);
+          }
+
           ctx.putImageData(imgData,0,0);
           c.toBlob(blob=>resolve(blob),'image/png');
           URL.revokeObjectURL(url);
