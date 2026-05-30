@@ -256,13 +256,19 @@ async function removeBgCanvas(file){
             }
           }
 
-          // Step D: Spill suppression — remove green tint from edge pixels
+          // Step D: Aggressive spill suppression on ALL fg pixels (not just edges)
           for(let i=0;i<W*H;i++){
-            if(smooth[i]>0&&smooth[i]<1){
-              // Desaturate green channel at edges
+            if(smooth[i]>0){
               const r=px[i*4],g=px[i*4+1],b=px[i*4+2];
+              // Green spill = green channel significantly higher than red/blue
               const avg=(r+b)/2;
-              if(g>avg) px[i*4+1]=Math.round(g*(smooth[i])+avg*(1-smooth[i]));
+              const spillAmount=Math.max(0, g-avg);
+              if(spillAmount>10){
+                // Suppress green spill — replace excess green with avg of R and B
+                // Stronger suppression near edges (low alpha)
+                const suppressStr=smooth[i]<0.8 ? 1.0 : 0.7;
+                px[i*4+1]=Math.round(g - spillAmount*suppressStr);
+              }
             }
             px[i*4+3]=Math.round(smooth[i]*255);
           }
