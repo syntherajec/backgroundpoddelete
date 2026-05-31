@@ -209,24 +209,23 @@ async function removeBgCanvas(file){
         const isChromaKey = (chromaCount/totalBorder) > 0.3;
 
         if(isChromaKey){
-          // Step A: Build raw alpha mask
+          // Step A: Build raw alpha mask — wider feather zone
           const alpha=new Float32Array(W*H);
           for(let i=0;i<W*H;i++){
             const r=px[i*4],g=px[i*4+1],b=px[i*4+2];
             const dist=colorDist(r,g,b,chromaR,chromaG,chromaB);
-            if(dist<chromaTol) alpha[i]=0;
-            else if(dist<chromaTol+30) alpha[i]=(dist-chromaTol)/30;
+            if(dist<chromaTol+10) alpha[i]=0;         // harder cutoff
+            else if(dist<chromaTol+50) alpha[i]=(dist-(chromaTol+10))/40;
             else alpha[i]=1;
           }
 
-          // Step B: Morphological erosion — shrink fg slightly to remove green fringe
+          // Step B: Morphological erosion — radius 3 to cut green fringe deeper
           const eroded=new Float32Array(alpha);
-          const eR=2; // erode radius
+          const eR=3;
           for(let y=eR;y<H-eR;y++){
             for(let x=eR;x<W-eR;x++){
               const idx=y*W+x;
               if(alpha[idx]===0) continue;
-              // Find min alpha in neighborhood
               let minA=1;
               for(let dy=-eR;dy<=eR;dy++){
                 for(let dx=-eR;dx<=eR;dx++){
@@ -238,23 +237,27 @@ async function removeBgCanvas(file){
             }
           }
 
-          // Step C: Gaussian blur on alpha for smooth edge
-          const smooth=new Float32Array(eroded);
-          const kernel=[1,4,7,4,1, 4,16,26,16,4, 7,26,41,26,7, 4,16,26,16,4, 1,4,7,4,1];
-          const kSum=273;
-          for(let y=2;y<H-2;y++){
-            for(let x=2;x<W-2;x++){
-              const idx=y*W+x;
-              if(eroded[idx]===0||eroded[idx]===1) continue;
-              let sum=0,ki=0;
-              for(let dy=-2;dy<=2;dy++){
-                for(let dx=-2;dx<=2;dx++){
-                  sum+=eroded[(y+dy)*W+(x+dx)]*kernel[ki++];
+          // Step C: Double Gaussian blur — smoother transition
+          function gaussBlur(src, W, H){
+            const dst=new Float32Array(src);
+            const kernel=[1,4,7,4,1, 4,16,26,16,4, 7,26,41,26,7, 4,16,26,16,4, 1,4,7,4,1];
+            const kSum=273;
+            for(let y=2;y<H-2;y++){
+              for(let x=2;x<W-2;x++){
+                const idx=y*W+x;
+                let sum=0,ki=0;
+                for(let dy=-2;dy<=2;dy++){
+                  for(let dx=-2;dx<=2;dx++){
+                    sum+=src[(y+dy)*W+(x+dx)]*kernel[ki++];
+                  }
                 }
+                dst[idx]=sum/kSum;
               }
-              smooth[idx]=sum/kSum;
             }
+            return dst;
           }
+          const blurred1=gaussBlur(eroded,W,H);
+          const smooth=gaussBlur(blurred1,W,H); // double pass = smoother
 
           // Step D: Aggressive spill suppression on ALL fg pixels (not just edges)
           for(let i=0;i<W*H;i++){
